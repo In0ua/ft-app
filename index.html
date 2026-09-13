@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <link rel="manifest" href="manifest.json">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Таймер</title>
+<style>
+  :root{
+    --bg: #000000;
+    --surface: #17171a;
+    --track: #2a2a30;
+    --accent: #e8b94e;
+    --warn: #e0435f;
+    --text: #f5f5f5;
+    --text-dim: #77767c;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  body{
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  .stage{
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+  }
+
+  .stage[data-state="finished"]{
+    animation: flash 1s ease-in-out 3;
+  }
+  @keyframes flash{
+    0%, 100% { background: var(--bg); }
+    50% { background: #2a0f16; }
+  }
+
+  .time{
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+    font-size: clamp(4rem, 26vmin, 22rem);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    color: var(--text);
+    transition: color 0.4s ease;
+  }
+  .stage[data-state="warn"] .time,
+  .stage[data-state="finished"] .time{
+    color: var(--warn);
+  }
+
+  .time span[contenteditable]{
+    outline: none;
+    border-radius: 0.1em;
+    padding: 0 0.02em;
+  }
+  .time span[contenteditable]:focus{
+    background: var(--surface);
+  }
+  .stage[data-state="running"] .time span[contenteditable]{
+    pointer-events: none;
+  }
+  .colon{ opacity: 0.4; margin: 0 -0.02em; }
+
+  .label{
+    margin-top: 1.2vh;
+    font-size: clamp(0.8rem, 2vmin, 1.1rem);
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+    outline: none;
+    max-width: 70vw;
+    text-align: center;
+    border-radius: 0.3em;
+    padding: 0.1em 0.4em;
+  }
+  .label:focus{ background: var(--surface); }
+
+  .ui{
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 5vh;
+    gap: 1.6vh;
+    opacity: 1;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+  }
+  .ui > *{ pointer-events: auto; }
+  .ui.hidden{ opacity: 0; }
+
+  .controls{
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+  }
+
+  button{
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+    color: var(--text);
+    background: var(--surface);
+    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease;
+  }
+  button:active{ transform: scale(0.94); }
+  button:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .btn-icon{
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-icon svg{ width: 19px; height: 19px; }
+
+  .btn-play{
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #201603;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-play svg{ width: 26px; height: 26px; }
+
+  .presets{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    max-width: 90vw;
+  }
+  .chip{
+    padding: 0.42em 0.9em;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    border: 1px solid var(--track);
+  }
+  .chip:hover{ color: var(--text); border-color: var(--accent); }
+  .chip.active{
+    color: #201603;
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .adjust{ display: flex; gap: 0.5rem; }
+  .adjust button{
+    padding: 0.4em 0.85em;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+  }
+  .adjust button:hover{ color: var(--text); }
+
+  .stage[data-state="running"] .adjust,
+  .stage[data-state="running"] .presets{
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  .hint{
+    position: absolute;
+    bottom: 1.4vh;
+    right: 1.6vh;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    opacity: 0.5;
+  }
+
+  .finish-text{
+    position: absolute;
+    top: 7vh;
+    font-size: clamp(0.85rem, 2vmin, 1.05rem);
+    color: var(--warn);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+  .stage[data-state="finished"] .finish-text{ opacity: 1; }
+
+  @media (max-width: 480px){
+    .controls{ gap: 0.8rem; }
+    .btn-icon{ width: 42px; height: 42px; }
+    .btn-play{ width: 62px; height: 62px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage" id="stage" data-state="paused">
+
+  <div class="finish-text" id="finishText">Время вышло — нажмите в любом месте</div>
+
+  <div class="time">
+    <span id="mm" contenteditable="true" spellcheck="false">15</span><span class="colon">:</span><span id="ss" contenteditable="true" spellcheck="false">00</span>
+  </div>
+  <div class="label" id="label" contenteditable="true" spellcheck="false">Фокус</div>
+
+  <div class="ui" id="ui">
+    <div class="adjust">
+      <button data-delta="-60">−1м</button>
+      <button data-delta="-5">−5с</button>
+      <button data-delta="5">+5с</button>
+      <button data-delta="60">+1м</button>
+    </div>
+
+    <div class="controls">
+      <button class="btn-icon" id="resetBtn" title="Сброс (R)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
+      <button class="btn-play" id="playBtn" title="Старт / Пауза (Пробел)">
+        <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="btn-icon" id="fsBtn" title="Полный экран (F)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
+      </button>
+    </div>
+
+    <div class="presets" id="presets">
+      <button class="chip" data-min="1">1 мин</button>
+      <button class="chip" data-min="5">5 мин</button>
+      <button class="chip" data-min="10">10 мин</button>
+      <button class="chip active" data-min="15">15 мин</button>
+      <button class="chip" data-min="25">25 мин</button>
+      <button class="chip" data-min="45">45 мин</button>
+    </div>
+  </div>
+
+  <div class="hint">Пробел — старт/пауза · R — сброс · F — полный экран · ↑↓ — минуты</div>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const mmEl = document.getElementById('mm');
+  const ssEl = document.getElementById('ss');
+  const labelEl = document.getElementById('label');
+  const playBtn = document.getElementById('playBtn');
+  const playIcon = document.getElementById('playIcon');
+  const resetBtn = document.getElementById('resetBtn');
+  const fsBtn = document.getElementById('fsBtn');
+  const ui = document.getElementById('ui');
+  const presets = document.getElementById('presets');
+
+  let durationSec = 15 * 60;
+  let remainingSec = durationSec;
+  let running = false;
+  let startTs = null;
+  let rafId = null;
+  let idleTimer = null;
+  let mmEditing = false;
+  let ssEditing = false;
+
+  const ICON_PLAY = '<path d="M8 5v14l11-7z"/>';
+  const ICON_PAUSE = '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+
+  function pad(n){ return String(Math.max(0, Math.floor(n))).padStart(2, '0'); }
+
+  function render(){
+    const m = Math.floor(remainingSec / 60);
+    const s = Math.floor(remainingSec % 60);
+    if (!mmEditing) mmEl.textContent = pad(m);
+    if (!ssEditing) ssEl.textContent = pad(s);
+
+    if (remainingSec <= 0){
+      stage.dataset.state = 'finished';
+    } else if (running && durationSec > 0 && remainingSec / durationSec <= 0.1){
+      stage.dataset.state = 'warn';
+    } else if (running) {
+      stage.dataset.state = 'running';
+    }
+
+    document.title = running ? `${pad(m)}:${pad(s)} — ${labelEl.textContent}` : 'Таймер';
+  }
+
+  function tick(){
+    if (!running) return;
+    const elapsed = (Date.now() - startTs) / 1000;
+    remainingSec = Math.max(0, durationSec - elapsed);
+    render();
+    if (remainingSec <= 0){
+      finish();
+      return;
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function play(){
+    if (running || remainingSec <= 0) return;
+    running = true;
+    startTs = Date.now() - (durationSec - remainingSec) * 1000;
+    stage.dataset.state = (remainingSec / durationSec) <= 0.1 ? 'warn' : 'running';
+    playIcon.innerHTML = ICON_PAUSE;
+    mmEl.blur(); ssEl.blur(); labelEl.blur();
+    rafId = requestAnimationFrame(tick);
+    scheduleIdle();
+  }
+
+  function pause(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    stage.dataset.state = 'paused';
+    playIcon.innerHTML = ICON_PLAY;
+    showUI();
+  }
+
+  function reset(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    remainingSec = durationSec;
+    stage.dataset.state = 'paused';
+    playIcon.innerHTML = ICON_PLAY;
+    render();
+    showUI();
+  }
+
+  function finish(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    remainingSec = 0;
+    stage.dataset.state = 'finished';
+    playIcon.innerHTML = ICON_PLAY;
+    render();
+    showUI();
+    beep();
+  }
+
+  function beep(){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.35, 0.7].forEach(t => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.28);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + t);
+        osc.stop(ctx.currentTime + t + 0.3);
+      });
+    } catch(e) {}
+  }
+
+  function setDuration(sec, clearActive){
+    durationSec = Math.max(1, Math.round(sec));
+    remainingSec = durationSec;
+    if (clearActive){
+      presets.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    }
+    if (stage.dataset.state !== 'running'){
+      stage.dataset.state = 'paused';
+    }
+    render();
+  }
+
+  function adjust(delta){
+    if (running) return;
+    setDuration(durationSec + delta, true);
+  }
+
+  playBtn.addEventListener('click', () => running ? pause() : play());
+  resetBtn.addEventListener('click', reset);
+
+  presets.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip || running) return;
+    presets.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    setDuration(parseInt(chip.dataset.min, 10) * 60, false);
+  });
+
+  document.querySelectorAll('.adjust button').forEach(btn => {
+    btn.addEventListener('click', () => adjust(parseInt(btn.dataset.delta, 10)));
+  });
+
+  stage.addEventListener('click', () => {
+    if (stage.dataset.state === 'finished') reset();
+  });
+
+  function toggleFullscreen(){
+    if (!document.fullscreenElement){
+      document.documentElement.requestFullscreen?.().catch(()=>{});
+    } else {
+      document.exitFullscreen?.();
+    }
+  }
+  fsBtn.addEventListener('click', toggleFullscreen);
+
+  function digitEdit(el, max, flagSetter){
+    el.addEventListener('focus', () => flagSetter(true));
+    el.addEventListener('input', () => {
+      el.textContent = el.textContent.replace(/[^0-9]/g, '').slice(0, 3);
+    });
+    el.addEventListener('blur', () => {
+      flagSetter(false);
+      let v = parseInt(el.textContent || '0', 10);
+      if (isNaN(v)) v = 0;
+      v = Math.min(max, Math.max(0, v));
+      el.textContent = pad(v);
+      const m = parseInt(mmEl.textContent, 10) || 0;
+      const s = parseInt(ssEl.textContent, 10) || 0;
+      setDuration(m * 60 + s, true);
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter'){ e.preventDefault(); el.blur(); }
+    });
+  }
+  digitEdit(mmEl, 999, v => mmEditing = v);
+  digitEdit(ssEl, 59, v => ssEditing = v);
+
+  function showUI(){
+    ui.classList.remove('hidden');
+    scheduleIdle();
+  }
+  function scheduleIdle(){
+    clearTimeout(idleTimer);
+    if (!running) return;
+    idleTimer = setTimeout(() => ui.classList.add('hidden'), 3000);
+  }
+  ['mousemove','touchstart','click'].forEach(evt => document.addEventListener(evt, showUI));
+
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement === mmEl || document.activeElement === ssEl || document.activeElement === labelEl) return;
+    switch(e.key){
+      case ' ':
+        e.preventDefault();
+        running ? pause() : play();
+        break;
+      case 'r': case 'R':
+        reset();
+        break;
+      case 'f': case 'F':
+        toggleFullscreen();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        adjust(e.shiftKey ? 300 : 60);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        adjust(e.shiftKey ? -300 : -60);
+        break;
+    }
+  });
+
+  render();
+})();
+</script>
+
+</body>
+</html>
